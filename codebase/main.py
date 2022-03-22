@@ -43,17 +43,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--epochs', default=200, type=int)
 
-    parser.add_argument('--momentum', default=0.9, type=float)
-
     parser.add_argument('--batch_size', default=1024, type=int)
 
-    parser.add_argument('--optimizer', default='adam_1', type=str)
-
     #model, encoder-decoder args
-
-    parser.add_argument('--flow_dim', default=24, type=int)
-
-    parser.add_argument('--flow_size', default=0, type=int)
 
     parser.add_argument('--norm', default='layernorm', type=str)
 
@@ -79,7 +71,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--folds', default=1, type=int)
 
-    parser.add_argument('--auc', default='roc', type=str)
+    parser.add_argument('--auc', default='pr', type=str)
 
     parser.add_argument('--early_stop', default=10, type=int)
 
@@ -95,6 +87,8 @@ if __name__ == '__main__':
 
     random.seed(seed), np.random.seed(seed), torch.manual_seed(seed)
 
+    genome = pickle.load(open(DATADIR+"hg19.pickle","rb"))
+
     binding_data = pd.read_csv(
         DATADIR + "ENCFF300IYQ.bed.gz",
         sep='\t',
@@ -102,31 +96,23 @@ if __name__ == '__main__':
         names=("chrom","start","end","name","score","strand")
         )
 
-    binding_data = binding_data[ ~binding_data['chrom'].isin(["chrX","chrY"]) ] # only keep autosomes (non sex chromosomes)
-
+    binding_data = binding_data[~binding_data['chrom'].isin(["chrX","chrY"])]
     binding_data = binding_data.sort_values(
-        ['chrom', 'start']
-        ).drop_duplicates() # sort so we can interleave negatives
+        ['chrom', 'start']).drop_duplicates()
 
-    binding_data[:10]
 
     test_chromosomes = ["chr1"]
-
     test_data = binding_data[ binding_data['chrom'].isin( test_chromosomes ) ]
 
     validation_chromosomes = ["chr2","chr3"]
-
     validation_data = binding_data[
         binding_data['chrom'].isin(validation_chromosomes)
         ]
 
     train_chromosomes = ["chr%i" % i for i in range(4, 22+1)]
-
     train_data = binding_data[
         binding_data['chrom'].isin(train_chromosomes)
         ]
-
-    genome = pickle.load(open(DATADIR+"hg19.pickle","rb"))
 
     model = ConvAVBR().to(args.device)
 
@@ -167,33 +153,13 @@ if __name__ == '__main__':
 
     others = [var[1] for var in others]
 
-    optimizer = {
-        'adam': optim.Adam(
-        model.parameters(),
-        lr=args.lr,
-        ),
-        'rmsprop':optim.RMSprop(
-        model.parameters(),
-        lr=args.lr,
-        momentum=0.9,
-        ),
-        'adam_1': optim.Adam([
+    optimizer = optim.Adam([
             {'params': generative_scale,
              'lr': args.lr/50.},
             {'params': others,
              'lr': args.lr},
         ]
-        ),
-        'rmsprop_2': optim.RMSprop([
-            {'params': generative_scale,
-             'lr': args.lr/10.,
-             'momentum': args.momentum},
-            {'params': others,
-             'lr': args.lr,
-             'momentum': args.momentum},
-            ]
-            ),
-        }[args.optimizer]
+        )
 
     mean_scores = []
 
@@ -205,40 +171,48 @@ if __name__ == '__main__':
 
     stop = 0
 
-    model.train()
-    
     for epoch in range(args.epochs):
-
+        
+        model.train()
+        
         for (x_tr, y_tr) in train_dataloader:
             
             x_tr, y_tr = x_tr.to(args.device), y_tr.to(args.device)
             
             optimizer.zero_grad()
 
-            elbo, score = model(x_tr, y_tr)
+            elbo, score, y_pred = model(x_tr, y_tr)
 
             elbo.backward()
 
             optimizer.step()
 
-            model.eval()
-
-            # elbo, score = evaluate(model, batcher)
-
             elbos.append(elbo)
-
-            scores.append(score)
+        
+        with torch.no_grad():
+        
+            model.eval()
+            
+            scores_ = []
+            
+            for (x_va, y_va) in validation_dataloader:
+            
+                x_va, y_va = x_va.to(args.device), y_va.to(args.device)
+                
+                elbo, score, y_pred = model(x_va, y_va)
+                
+                scores_.append(score)
+                
+            scores.append(np.mean(scores_))
 
             best_scores.append(max(scores))
 
             mean_scores.append(np.mean(scores))
 
-            if score >= max(scores):
+            if scores[-1] >= max(scores):
 
                 best_model = deepcopy(model)
 
                 save(best_model, 'binding')
-
-            model.train()
         
         print(epoch, best_scores[-1])
