@@ -43,11 +43,19 @@ class qz_x_network(nn.Module):
         
         self.inference_network = CNN(num_motifs=num_motifs)
         
+        temp = -15.
+        self.temp = nn.Parameter(
+            torch.tensor([temp]),
+            requires_grad=True,
+            )
+        
     def forward(self, x):
         
         #batch_size x motif assignment probability
         
-        z = nn.Softmax(-1)(self.inference_network(x))
+        z = nn.Softmax(-1)(
+            nn.Softplus()(self.temp) * self.inference_network(x)
+            )
     
         return z
 
@@ -110,8 +118,8 @@ class Model(nn.Module):
         
         #encourage sparsity for PWM matrix
         
-        self.prior_scale = 1e-1
-        self.prior_loc = -1e1*self.prior_scale 
+        self.prior_scale = 1e-2
+        self.prior_loc = -1e3*self.prior_scale 
         
         #encourage good predictions
         

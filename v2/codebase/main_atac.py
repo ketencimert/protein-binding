@@ -1,6 +1,8 @@
 
 import argparse
 from copy import deepcopy
+import gc
+
 import random
 import pickle
 import pandas as pd
@@ -13,7 +15,7 @@ from tqdm import tqdm
 
 from codebase.batcher import BedPeaksDataset
 
-from codebase.model import ConvAVBR
+from codebase.model import Model
 
 from codebase.utils import save, save_runs
 
@@ -41,7 +43,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--lr', default=1e-3, type=float)
 
-    parser.add_argument('--epochs', default=200, type=int)
+    parser.add_argument('--epochs', default=600, type=int)
 
     parser.add_argument('--batch_size', default=1024, type=int)
 
@@ -89,23 +91,22 @@ if __name__ == '__main__':
 
     genome = pickle.load(open(DATADIR+"hg19.pickle","rb"))
 
-
     atac_data = pd.read_csv(
-        DATADIR + "ATAC_data.bed.gz", sep='\t', names=("chrom","start","end")
-        )
-    
-    atac_data = atac_data.sort_values(['chrom', 'start']) # actually already sorted but why not
-    
-    validation_chromosomes = ["chr3","chr4"]
-    validation_data = atac_data[ 
-        atac_data['chrom'].isin(validation_chromosomes) 
-        ]
-    
-    train_data = atac_data[
-        ~atac_data['chrom'].isin( validation_chromosomes ) 
-        ]
+        DATADIR + "ATAC_data.bed.gz", sep='\t', names=("chrom", "start", "end")
+    )
 
-    model = ConvAVBR().to(args.device)
+    atac_data = atac_data.sort_values(['chrom', 'start'])  # actually already sorted but why not
+
+    validation_chromosomes = ["chr3", "chr4"]
+    validation_data = atac_data[
+        atac_data['chrom'].isin(validation_chromosomes)
+    ]
+
+    train_data = atac_data[
+        ~atac_data['chrom'].isin(validation_chromosomes)
+    ]
+
+    model = Model().to(args.device)
 
     train_dataset = BedPeaksDataset(
         train_data,
@@ -124,6 +125,9 @@ if __name__ == '__main__':
         genome,
         model.seq_len
         )
+
+    del genome
+    gc.collect()
 
     validation_dataloader = torch.utils.data.DataLoader(
         validation_dataset,

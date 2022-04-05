@@ -85,7 +85,7 @@ else:
 
     best_model = torch.load('saves/best_model_binding.pth')
 
-index = 1
+index = 0
 best_model = best_model.cpu()
 
 self = best_model

@@ -1,6 +1,8 @@
 
 import argparse
 from copy import deepcopy
+import gc
+
 import random
 import pickle
 import pandas as pd
@@ -87,7 +89,7 @@ if __name__ == '__main__':
 
     random.seed(seed), np.random.seed(seed), torch.manual_seed(seed)
 
-    # genome = pickle.load(open(DATADIR+"hg19.pickle","rb"))
+    genome = pickle.load(open(DATADIR+"hg19.pickle","rb"))
 
     binding_data = pd.read_csv(
         DATADIR + "ENCFF300IYQ.bed.gz",
@@ -132,6 +134,9 @@ if __name__ == '__main__':
         genome,
         model.seq_len
         )
+
+    del genome
+    gc.collect()
 
     validation_dataloader = torch.utils.data.DataLoader(
         validation_dataset,
