@@ -108,7 +108,7 @@ if __name__ == '__main__':
         ~atac_data['chrom'].isin(validation_chromosomes)
     ]
 
-    model = Model(num_motifs=100, kernel_size=20).to(args.device)
+    model = Model(num_motifs=200, kernel_size=20).to(args.device)
 
     train_dataset = BedPeaksDataset(
         train_data,
@@ -214,6 +214,6 @@ if __name__ == '__main__':
 
                 best_model = deepcopy(model)
 
-                save(best_model, 'binding')
+                save(best_model, 'binding_atac')
         
         print(epoch, best_scores[-1])

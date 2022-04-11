@@ -217,6 +217,6 @@ if __name__ == '__main__':
 
                 best_model = deepcopy(model)
 
-                save(best_model, 'binding')
+                save(best_model, 'binding_chip')
         
         print(epoch, best_scores[-1])
