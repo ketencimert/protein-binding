@@ -12,9 +12,9 @@ import torch
 from torch.distributions.bernoulli import Bernoulli
 from torch import optim
 from tqdm import tqdm
-
+import timeit
 from codebase.batcher import BedPeaksDataset
-
+import torch.nn.functional as F
 from codebase.networks import *
 
 from codebase.utils import save, save_runs
@@ -30,6 +30,33 @@ from codebase.utils import (
     )
 
 DATADIR = './data/'
+
+def run_one_epoch(train_flag, dataloader, model, optimizer, device="cuda"):
+
+    torch.set_grad_enabled(train_flag)
+    model.train() if train_flag else model.eval() 
+
+    losses = []
+    accuracies = []
+
+    for (x,y) in dataloader: # collection of tuples with iterator
+
+        (x, y) = ( x.to(device), y.to(device) ) # transfer data to GPU
+
+        output = model(x) # forward pass
+        output = output.squeeze() # remove spurious channel dimension
+        loss = F.binary_cross_entropy_with_logits( output, y ) # numerically stable
+
+        if train_flag: 
+            loss.backward() # back propagation
+            optimizer.step()
+            optimizer.zero_grad()
+
+        losses.append(loss.detach().cpu().numpy())
+        accuracy = pr_auc(output, y)
+        accuracies.append(accuracy)  
+    
+    return( np.mean(losses), np.mean(accuracies) )
 
 def evaluate(model, batcher):
 
@@ -143,62 +170,31 @@ if __name__ == '__main__':
         ]
         )
 
-    mean_scores = []
-
-    best_scores = []
-
-    scores = []
-
-    loglikelihoods = []
-
     stop = 0
-
-    for epoch in range(args.epochs):
+    device = args.device
+    train_accs = []
+    val_accs = []
+    patience = 10 # for early stopping
+    patience_counter = patience
+    best_val_loss = np.inf
+    
+    check_point_filename = 'saves/{}_checkpoint.pt'.format(args.model) # to save the best model fit to date
+    for epoch in range(100):
+        start_time = timeit.default_timer()
+        train_loss, train_acc = run_one_epoch(True, train_dataloader, model, optimizer, device)
+        val_loss, val_acc = run_one_epoch(False, validation_dataloader, model, optimizer, device)
+        train_accs.append(train_acc)
+        val_accs.append(val_acc)
         
-        model.train()
-        
-        for (x_tr, y_tr) in train_dataloader:
-            
-            x_tr, y_tr = x_tr.to(args.device), y_tr.to(args.device)
-            
-            optimizer.zero_grad()
-
-            y_pred = torch.sigmoid(model(x_tr))
-            
-            loglikelihood = -Bernoulli(probs=y_pred).log_prob(y_tr).mean()
-            
-            loglikelihood.backward()
-
-            optimizer.step()
-
-            loglikelihoods.append(loglikelihood)
-        
-        with torch.no_grad():
-        
-            model.eval()
-            
-            scores_ = []
-            
-            for (x_va, y_va) in validation_dataloader:
-            
-                x_va, y_va = x_va.to(args.device), y_va.to(args.device)
-                
-                y_pred = torch.sigmoid(model(x_va))
-                
-                score = pr_auc(y_pred, y_va)
-                
-                scores_.append(score)
-                
-            scores.append(np.mean(scores_))
-
-            best_scores.append(max(scores))
-
-            mean_scores.append(np.mean(scores))
-
-            if scores[-1] >= max(scores):
-
-                best_model = deepcopy(model)
-
-                save(best_model, 'binding_{}'.format(args.model))
-        
-        print(epoch, best_scores[-1])
+        if val_loss < best_val_loss: 
+            torch.save(model, check_point_filename)
+            best_val_loss = val_loss
+            patience_counter = patience
+        else: 
+            patience_counter -= 1
+            if patience_counter <= 0: 
+                model.load_state_dict(torch.load(check_point_filename)) # recover the best model so far
+                break
+        elapsed = float(timeit.default_timer() - start_time)
+        print("Epoch %i took %.2fs. Train loss: %.4f acc: %.4f. Val loss: %.4f acc: %.4f. Patience left: %i" % 
+              (epoch+1, elapsed, train_loss, train_acc, val_loss, val_acc, patience_counter ))                

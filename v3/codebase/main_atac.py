@@ -19,6 +19,8 @@ from codebase.model import Model
 
 from codebase.utils import save, save_runs
 
+from torch import nn
+
 DATADIR = './data/'
 
 def evaluate(model, batcher):
@@ -37,7 +39,7 @@ if __name__ == '__main__':
 
     #device args
 
-    parser.add_argument('--device', default='cpu', type=str)
+    parser.add_argument('--device', default='cuda', type=str)
 
     #optimization args
 
@@ -106,7 +108,7 @@ if __name__ == '__main__':
         ~atac_data['chrom'].isin(validation_chromosomes)
     ]
 
-    model = Model(num_motifs=30).to(args.device)
+    model = Model(num_motifs=100, kernel_size=20).to(args.device)
 
     train_dataset = BedPeaksDataset(
         train_data,
@@ -187,7 +189,11 @@ if __name__ == '__main__':
         with torch.no_grad():
             
             model.eval()
-            print(nn.Softmax(-1)(model.qz_x_network(x_tr)[0]).mean(0))
+            
+            # w, _ = model.qw_network()
+            
+            # print(nn.Softmax(-1)(model.pz_wyx_network(model, w,y_tr, x_tr).mean(0)))
+            
             scores_ = []
             
             for (x_va, y_va) in validation_dataloader:

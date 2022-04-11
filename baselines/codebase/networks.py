@@ -55,7 +55,7 @@ class AttentionNN(nn.Module):
 
     def __init__(self, 
                  embedding_dim=128,
-                 nhead=4, #attention heads
+                 nhead=8, #attention heads
                  nucleatoide_size=4, #number of base pairs,
                  encoder_layer=3,#number of consecutive attention networks
                  ):
@@ -100,7 +100,7 @@ class FeedforwardNN(nn.Module):
     def __init__(self,
                  dropout_input=0.5,
                  dropout_intermediate=0.5,
-                 layer_size=[110, 64, 64, 32, 1],
+                 layer_size=[440, 64, 64, 32, 1],
                  activation='elu',
                  norm='layernorm'
                  ):
@@ -129,7 +129,7 @@ class FeedforwardNN(nn.Module):
 
             activation = nn.SiLU()
 
-        # self.loc_layers.append(nn.BatchNorm1d(layer_size[0]))
+        self.loc_layers.append(nn.BatchNorm1d(layer_size[0]))
 
         # self.loc_layers.append(nn.Dropout(dropout_input))
 
@@ -139,6 +139,8 @@ class FeedforwardNN(nn.Module):
 
             self.loc_layers.append(activation)
 
+            self.loc_layers.append(nn.LayerNorm(layer_size[i+1]))
+
             self.loc_layers.append(nn.Dropout(dropout_intermediate))
 
         self.loc_layers.append(nn.Linear(layer_size[-2], layer_size[-1]))
@@ -147,9 +149,9 @@ class FeedforwardNN(nn.Module):
 
     def forward(self, x):
 
-        loc = self.loc_layers(x)
+        loc = self.loc_layers(x.view(x.size(0), -1))
 
-        return loc.mean(1)
+        return loc
 
 
 class VariationalNetwork(nn.Module):

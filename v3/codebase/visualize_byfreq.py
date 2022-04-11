@@ -23,7 +23,7 @@ keys={
 
 counts = np.zeros((4,20))
 
-index = 1
+index = 0
 
 for (x_tr, y_tr) in train_dataloader:
 

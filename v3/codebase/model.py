@@ -51,29 +51,29 @@ def pz_wyx_network(model, w, y, x):
             
             for j in (0,1):
             
-                # py_xwz += Bernoulli(
-                #     probs=model.py_xwz_network(x, w[i])
-                #     ).log_prob(torch.Tensor([j]).to(x.device))
+                py_xwz += Bernoulli(
+                    probs=model.py_xwz_network(x, w[i])
+                    ).log_prob(torch.Tensor([j]).to(x.device))
                 
-                generative_loc = model.py_xwz_network(x, w[i])
+                # generative_loc = model.py_xwz_network(x, w[i])
                 
-                generative_scale = 1/nn.Softplus()(model.generative_scale)
+                # generative_scale = 1/nn.Softplus()(model.generative_scale)
             
-                eps = 1e-16
+                # eps = 1e-16
             
-                generative_loglikelihood = -torch.log(
-                eps + (eps + generative_loc).pow(generative_scale) \
-                    + (eps + 1-generative_loc).pow(generative_scale)
-                )
+                # generative_loglikelihood = -torch.log(
+                # eps + (eps + generative_loc).pow(generative_scale) \
+                #     + (eps + 1-generative_loc).pow(generative_scale)
+                # )
     
-                generative_loglikelihood -= generative_scale * BCELoss(reduction='none')(
-                generative_loc,
-                torch.Tensor([j]).to(x.device).repeat_interleave(generative_loc.size(0),0)
-                )
-
+                # generative_loglikelihood -= generative_scale * BCELoss(reduction='none')(
+                # generative_loc,
+                # torch.Tensor([j]).to(x.device).repeat_interleave(generative_loc.size(0),0)
+                # )
                 
+                # py_xwz += generative_loglikelihood
                 
-            pz_ywx.append((generative_loglikelihood).unsqueeze(-1))
+            pz_ywx.append(py_xwz.unsqueeze(-1))
         
         pz_ywx = torch.cat(pz_ywx, -1)
         
@@ -132,33 +132,6 @@ class qw_network(nn.Module):
         scale = nn.Softplus()(self.scale)
         
         return loc, scale
-        
-
-class qz_x_network(nn.Module):
-    def __init__(self, num_motifs):
-        super(qz_x_network, self).__init__()
-        
-        #the parameters of this network is independent of PSSM/PWM
-        
-        self.loc = CNN(num_motifs=num_motifs)
-        
-        self.scale = CNN(num_motifs=num_motifs)
-        
-        # temp = -10.
-        # self.temp = nn.Parameter(
-        #     torch.tensor([temp]),
-        #     requires_grad=True,
-        #     )
-        
-    def forward(self, x):
-        
-        #batch_size x motif assignment probability
-        
-        loc = self.loc(x)
-        
-        scale = nn.Softplus()(self.scale(x))
-        
-        return loc, scale
 
 
 class Model(nn.Module):
@@ -178,11 +151,6 @@ class Model(nn.Module):
         
         self.qw_dist = Normal
         self.pw_dist = Normal
-
-        self.qz_x_network = qz_x_network(
-            num_motifs=num_motifs
-            )
-        
 
         #parameterize distributions
         
@@ -205,18 +173,17 @@ class Model(nn.Module):
         #encourage sparsity for PWM matrix
         
         self.prior_scale = 1e-3
-        self.prior_loc = -1e1 * self.prior_scale
+        self.prior_loc = -1e-2
         
         #encourage good predictions
         
-        generative_scale = -10.
+        generative_scale = -15.
         self.generative_scale = nn.Parameter(
             torch.tensor([generative_scale]),
             requires_grad=True,
             )
 
-        self.seq_len = self.qz_x_network.loc.seq_len
-
+        self.seq_len = 110
         #choose metric
         
         if metric == 'pr':
@@ -239,7 +206,7 @@ class Model(nn.Module):
         
         z = self.pz_wyx_network(self, w, y, x)
         
-        elbo += (z * z.log()).sum(1) #for each x make a motif assignment
+        elbo += (z * (1e-20 + z).log()).sum(1) #for each x make a motif assignment
         
         elbo += kl_divergence_1(
             posterior_loc,
@@ -276,7 +243,8 @@ class Model(nn.Module):
                 eps + (eps + generative_loc).pow(generative_scale) \
                     + (eps + 1-generative_loc).pow(generative_scale)
                 )
-    
+            # generative_loglikelihood = Bernoulli(probs=generative_loc).log_prob(y)
+            
             generative_loglikelihood -= generative_scale * BCELoss()(
                 generative_loc,
                 y
