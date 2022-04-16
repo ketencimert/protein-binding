@@ -17,9 +17,7 @@ from codebase.batcher import BedPeaksDataset
 
 from codebase.model import Model
 
-from codebase.utils import save, save_runs
-
-from torch import nn
+from codebase.utils import save
 
 DATADIR = './data/'
 
@@ -168,7 +166,7 @@ if __name__ == '__main__':
 
     stop = 0
 
-    for epoch in range(args.epochs):
+    for epoch in tqdm(range(args.epochs)):
         
         model.train()
         
@@ -189,10 +187,6 @@ if __name__ == '__main__':
         with torch.no_grad():
             
             model.eval()
-            
-            # w, _ = model.qw_network()
-            
-            # print(nn.Softmax(-1)(model.pz_wyx_network(model, w,y_tr, x_tr).mean(0)))
             
             scores_ = []
             
@@ -216,4 +210,4 @@ if __name__ == '__main__':
 
                 save(best_model, 'binding_atac')
         
-        print(epoch, best_scores[-1])
+        print('Epoch : {} Best Score : {}'.format(epoch, best_scores[-1]))

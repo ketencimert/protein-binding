@@ -115,7 +115,9 @@ if __name__ == '__main__':
         binding_data['chrom'].isin(train_chromosomes)
         ]
 
-    model = Model(num_motifs=2).to(args.device)
+    model = Model(
+        num_motifs=2
+        ).to(args.device)
 
     train_dataset = BedPeaksDataset(
         train_data,
@@ -143,23 +145,23 @@ if __name__ == '__main__':
         batch_size=1000
         )
 
-    generative_scale = filter(
-        lambda kv: kv[0] in ['generative_scale'],
+    decoder = filter(
+        lambda kv: kv[0] in ['py_xwz_network'],
         model.named_parameters()
         )
 
-    generative_scale = [var[1] for var in generative_scale]
+    decoder = [var[1] for var in decoder]
 
     others = filter(
-        lambda kv: kv[0] not in ['generative_scale'],
+        lambda kv: kv[0] not in ['py_xwz_network'],
         model.named_parameters()
         )
 
     others = [var[1] for var in others]
 
     optimizer = optim.Adam([
-            {'params': generative_scale,
-             'lr': args.lr/50.},
+            {'params': decoder,
+             'lr': args.lr},
             {'params': others,
              'lr': args.lr},
         ]
