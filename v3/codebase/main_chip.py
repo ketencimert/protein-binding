@@ -115,7 +115,7 @@ if __name__ == '__main__':
         binding_data['chrom'].isin(train_chromosomes)
         ]
 
-    model = Model().to(args.device)
+    model = Model(num_motifs=2).to(args.device)
 
     train_dataset = BedPeaksDataset(
         train_data,

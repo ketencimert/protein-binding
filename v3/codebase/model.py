@@ -7,7 +7,7 @@ from torch.nn import BCELoss
 from torch import nn
 import torch.nn.functional as F
 
-from codebase.networks import CNN
+from codebase.networks import CNN, FFN
 
 from codebase.utils import (
     kl_divergence_1,
@@ -17,25 +17,72 @@ from codebase.utils import (
 
 
 class py_xwz_network(nn.Module):
-    def __init__(self):
+    def __init__(self, 
+                 filter_widths=[15, 5],
+                 num_chunks=5,
+                 max_pool_factor=4,
+                 nchannels=[4, 32, 32],
+                 n_hidden=32,
+                 dropout=0.2,
+                 num_motifs=100,
+                 kernel_size=20,
+                 stride=1,
+                 use_z=True):
         super(py_xwz_network, self).__init__()
 
         #cache kernel size
+        self.use_z = use_z
+        
+        self.theta_x = CNN(
+            filter_widths=filter_widths,
+            num_chunks=num_chunks, 
+            max_pool_factor=max_pool_factor, 
+            nchannels=nchannels,
+            n_hidden=n_hidden, 
+            dropout=dropout,
+            num_motifs=num_motifs,
+            kernel_size=kernel_size,
+            stride=stride,
+            use_z=use_z,
+            )
+        
+        self.seq_len = self.theta_x.seq_len
+        self.output_dim = self.theta_x.output_dim
+        
+        if self.use_z:
+            layer_size = [self.output_dim*2] + nchannels[1:] + [self.output_dim]
+            self.theta_z = nn.Embedding(
+                num_embeddings=num_motifs, 
+                embedding_dim=self.output_dim
+                )
+            self.theta = FFN(
+                dropout=dropout,
+                layer_size=layer_size,
+                activation='elu',
+                )
 
-    def forward(self, x, w_z):
+    def forward(self, x, z, w):
 
         #compute the convolution
-
-        w_z = w_z.view(4, -1)
+        
+        theta_x = self.theta_x(x)
+        if self.use_z:
+            z = torch.tensor([z]).to(x.device)
+            theta_z = self.theta_z(z).repeat_interleave(x.size(0), 0)
+            theta = self.theta(torch.cat([theta_x, theta_z],-1))
+        else:
+            theta = theta_x
+        
+        w_z = w[z,:].view(4, -1)
 
         y = nn.Sigmoid()(
-            F.conv1d(x, w_z.unsqueeze(0)).squeeze(1).max(-1)[0]
+            ((F.conv1d(x, w_z.unsqueeze(0))).squeeze(1) * theta).sum(-1)
             )
 
         return y #gives the logit
 
 
-def pz_wyx_network(model, w, y, x):
+def pz_wx_network(model, w, x):
 
         prior_loc, prior_scale = model.pw_network()
 
@@ -52,7 +99,7 @@ def pz_wyx_network(model, w, y, x):
             for j in (0,1):
 
                 py_xwz += Bernoulli(
-                    probs=model.py_xwz_network(x, w[i])
+                    probs=model.py_xwz_network(x, i, w)
                     ).log_prob(torch.Tensor([j]).to(x.device))
 
                 # generative_loc = model.py_xwz_network(x, w[i])
@@ -167,7 +214,7 @@ class Model(nn.Module):
             kernel_size=kernel_size,
             )
 
-        self.pz_wyx_network = pz_wyx_network
+        self.pz_wx_network = pz_wx_network
 
 
         #encourage sparsity for PWM matrix
@@ -203,7 +250,7 @@ class Model(nn.Module):
             scale=posterior_scale
             ).rsample()
 
-        z = self.pz_wyx_network(self, w, y, x)
+        z = self.pz_wx_network(self, w, x)
 
         elbo += (z * (1e-20 + z).log()).sum(1) #for each x make a motif assignment
 
@@ -232,7 +279,7 @@ class Model(nn.Module):
         #2. Take the expectation w.r.t. motif assignment:
         for i in range(self.num_motifs):
 
-            generative_loc = self.py_xwz_network(x, w[i,:])
+            generative_loc = self.py_xwz_network(x, i, w)
 
             generative_scale = 1/nn.Softplus()(self.generative_scale)
 
@@ -260,29 +307,43 @@ class Model(nn.Module):
         return loss, score, y_pred
 
     def predict(self, x, y):
-
+        
+        #E_{q(w),p(z|..)p(y|..)}[y] = E_{q(w),p(z|..)}[p(y|..)]
+        
         #1. Get motif assignments
-
+        #We won't sample w - just use w_mean to approximate 
+        #for computational efficiency
         w, _ = self.qw_network()
+        
+        z = self.pz_wx_network(self, w, x)
+        
+        #2. Now we marginalize E_{p(z|..)}[p(y|..)]
+        y_pred = torch.stack(
+            [z[:,i] * self.py_xwz_network(x, i, w) for i in range(z.size(1))]
+            ).sum(0)
+            
+        
+        
+        # motif_assignments = self.pz_wyx_network(self,w,y,x).max(-1)[1]
 
-        motif_assignments = self.pz_wyx_network(self,w,y,x).max(-1)[1]
+        # #2. Get motif tensor
+        # posterior_loc = w
 
-        #2. Get motif tensor
-        posterior_loc = w
+        # w_z = posterior_loc[motif_assignments, :]
 
-        w_z = posterior_loc[motif_assignments, :]
+        # w_z = w_z.view(x.size(0), 4, -1)
 
-        w_z = w_z.view(x.size(0), 4, -1)
+        # y = []
+        
+        # theta = self.py_xwz_network.theta(x)
+        
+        # for i in range(x.size(0)):
+            
+        #     y.append((
+        #         F.conv1d(x[i,:,:].unsqueeze(0),
+        #                  w_z[i,:,:].unsqueeze(0)) * theta[i,:]).sum()
+        #         )
 
-        y = []
-
-        for i in range(x.size(0)):
-
-            y.append(
-                F.conv1d(x[i,:,:].unsqueeze(0),
-                         w_z[i,:,:].unsqueeze(0)).max(-1)[0]
-                )
-
-        y_pred = nn.Sigmoid()(torch.cat(y).view(-1))
+        # y_pred = nn.Sigmoid()(torch.stack(y).view(-1))
 
         return y_pred
