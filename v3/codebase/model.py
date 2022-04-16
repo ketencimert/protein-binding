@@ -226,7 +226,7 @@ class Model(nn.Module):
                 logits=logits
                 ).log_prob(y)
 
-            elbo -= 1e4 * z[:,i] * generative_loglikelihood
+            elbo -= 1e6 * z[:,i] * generative_loglikelihood
 
         loss = elbo.mean()
 

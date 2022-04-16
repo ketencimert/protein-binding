@@ -1,4 +1,3 @@
-
 import argparse
 from copy import deepcopy
 import gc
@@ -14,10 +13,8 @@ from torch import optim
 from tqdm import tqdm
 
 from codebase.batcher import BedPeaksDataset
-
 from codebase.model import Model
-
-from codebase.utils import save, save_runs
+from codebase.utils import save
 
 DATADIR = './data/'
 
@@ -36,51 +33,28 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     #device args
-
-    parser.add_argument('--device', default='cpu', type=str)
+    parser.add_argument('--device', default='cuda', type=str)
 
     #optimization args
-
     parser.add_argument('--lr', default=1e-3, type=float)
-
     parser.add_argument('--epochs', default=300, type=int)
-
     parser.add_argument('--batch_size', default=1024, type=int)
+    parser.add_argument('--num_workers', default=0, type=int)
 
     #model, encoder-decoder args
-
-    parser.add_argument('--norm', default='layernorm', type=str)
-
-    parser.add_argument('--activation', default='elu', type=str)
-
-    parser.add_argument('--prior_dist', default='normal', type=str)
-
-    parser.add_argument('--dropout_input', default=0.5, type=float)
-
-    parser.add_argument('--dropout_output', default=0.0, type=float)
-
-    parser.add_argument('--amortize_bias', default=False, type=bool)
-
-    parser.add_argument('--dropout_intermediate', default=0.5, type=float)
-
-    parser.add_argument('--generative_scale_grad', default=False, type=bool)
-
-    parser.add_argument('--layer_size', default=[48, 32], type=int, nargs='+')
-
-    parser.add_argument('--variational_network', default='feedforward_3', type=str)
-
+    parser.add_argument('--num_chunks', default=5, type=int)
+    parser.add_argument('--max_pool_factor', default=4, type=int)
+    parser.add_argument('--nchannels', default=[4, 32, 32], type=list)
+    parser.add_argument('--n_hidden', default=32, type=int)
+    parser.add_argument('--dropout', default=0.2, type=int)
+    parser.add_argument('--num_motifs', default=2, type=int)
+    parser.add_argument('--kernel_size', default=20, type=int)
+    parser.add_argument('--stride', default=1, type=int)
+    parser.add_argument('--use_z', default=True, type=bool)
+    parser.add_argument('--metric', default='pr', type=str)
+   
     #data, fold, tune, metric args
-
-    parser.add_argument('--folds', default=1, type=int)
-
-    parser.add_argument('--auc', default='pr', type=str)
-
     parser.add_argument('--early_stop', default=10, type=int)
-
-    parser.add_argument('--visualize', default=True)
-
-    parser.add_argument('--check_early_stop', default=1000, type=int)
-
     args = parser.parse_args()
 
     print(args)
@@ -88,7 +62,6 @@ if __name__ == '__main__':
     seed = 12345
 
     random.seed(seed), np.random.seed(seed), torch.manual_seed(seed)
-
     genome = pickle.load(open(DATADIR+"hg19.pickle","rb"))
 
     binding_data = pd.read_csv(
@@ -116,7 +89,16 @@ if __name__ == '__main__':
         ]
 
     model = Model(
-        num_motifs=2
+            num_chunks=args.num_chunks,
+            max_pool_factor=args.max_pool_factor,
+            nchannels=args.nchannels,
+            n_hidden=args.n_hidden,
+            dropout=args.dropout,
+            num_motifs=args.num_motifs,
+            kernel_size=args.kernel_size,
+            stride=args.stride,
+            use_z=args.use_z,
+            metric=args.metric,
         ).to(args.device)
 
     train_dataset = BedPeaksDataset(
@@ -127,8 +109,8 @@ if __name__ == '__main__':
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
-        batch_size=1000,
-        num_workers = 0
+        batch_size=args.batch_size,
+        num_workers=args.num_workers
         )
 
     validation_dataset = BedPeaksDataset(
@@ -142,7 +124,7 @@ if __name__ == '__main__':
 
     validation_dataloader = torch.utils.data.DataLoader(
         validation_dataset,
-        batch_size=1000
+        batch_size=args.batch_size
         )
 
     decoder = filter(
@@ -168,16 +150,12 @@ if __name__ == '__main__':
         )
 
     mean_scores = []
-
     best_scores = []
-
     scores = []
-
     elbos = []
-
     stop = 0
 
-    for epoch in range(args.epochs):
+    for epoch in tqdm(range(args.epochs)):
         
         model.train()
         
@@ -221,4 +199,4 @@ if __name__ == '__main__':
 
                 save(best_model, 'binding_chip')
         
-        print(epoch, best_scores[-1])
+        print('Epoch : {} Best Score : {}'.format(epoch, best_scores[-1]))
