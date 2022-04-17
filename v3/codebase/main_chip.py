@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
     #optimization args
     parser.add_argument('--lr', default=1e-3, type=float)
-    parser.add_argument('--epochs', default=300, type=int)
+    parser.add_argument('--epochs', default=500, type=int)
     parser.add_argument('--batch_size', default=1024, type=int)
     parser.add_argument('--num_workers', default=0, type=int)
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_motifs', default=2, type=int)
     parser.add_argument('--kernel_size', default=20, type=int)
     parser.add_argument('--stride', default=1, type=int)
-    parser.add_argument('--use_z', default=True, type=bool)
+    parser.add_argument('--use_z', default=False, type=bool)
     parser.add_argument('--metric', default='pr', type=str)
    
     #data, fold, tune, metric args

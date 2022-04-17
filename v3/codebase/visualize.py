@@ -53,7 +53,7 @@ if read:
     
     genome = pickle.load(open(DATADIR+"hg19.pickle","rb"))
     
-    best_model = torch.load('saves/best_model_binding.pth')
+    best_model = torch.load('saves/best_model_binding_chip.pth')
     
     train_dataset = BedPeaksDataset(
         train_data,
@@ -83,9 +83,9 @@ if read:
 
 else:
 
-    best_model = torch.load('saves/best_model_binding.pth')
+    best_model = torch.load('saves/best_model_binding_chip.pth')
 
-index = 1
+index = 0
 
 best_model = best_model.cpu()
 

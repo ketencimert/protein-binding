@@ -190,6 +190,6 @@ if __name__ == '__main__':
 
                 best_model = deepcopy(model)
 
-                save(best_model, 'binding_chip')
+                save(best_model, 'binding_atac')
         
         print('Epoch : {} Best Score : {}'.format(epoch, best_scores[-1]))

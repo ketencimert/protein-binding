@@ -15,7 +15,7 @@ from codebase.utils import (
     )
 
 
-class py_xwz_network(nn.Module):
+class py_xzw_network(nn.Module):
     def __init__(self, 
                  filter_widths=[15, 5],
                  num_chunks=5,
@@ -28,7 +28,7 @@ class py_xwz_network(nn.Module):
                  stride=1,
                  use_z=True
                  ):
-        super(py_xwz_network, self).__init__()
+        super(py_xzw_network, self).__init__()
 
         self.use_z = use_z
         
@@ -90,7 +90,7 @@ def pz_wx_network(model, w, x):
             for j in (0,1):
 
                 py_xwz += model.py_xwz_dist(
-                    logits=model.py_xwz_network(x, i, w)
+                    logits=model.py_xzw_network(x, i, w)
                     ).log_prob(torch.Tensor([j]).to(x.device))
 
             pz_ywx.append(py_xwz.unsqueeze(-1))
@@ -152,7 +152,7 @@ class Model(nn.Module):
             kernel_size=kernel_size,
             )
 
-        self.py_xwz_network = py_xwz_network(
+        self.py_xzw_network = py_xzw_network(
             num_chunks=5,
             max_pool_factor=4,
             nchannels=[4, 32, 32],
@@ -167,10 +167,10 @@ class Model(nn.Module):
         self.pz_wx_network = pz_wx_network
 
         #encourage sparsity for PWM matrix
-        self.prior_scale = 1e-3
         self.prior_loc = -1e-2
+        self.prior_scale = 1e-3
 
-        self.seq_len = self.py_xwz_network.seq_len
+        self.seq_len = self.py_xzw_network.seq_len
         #choose metric
 
         if metric == 'pr':
@@ -221,7 +221,7 @@ class Model(nn.Module):
         #4. Take the expectation w.r.t. motif assignment:
         for i in range(self.num_motifs):
 
-            logits = self.py_xwz_network(x, i, w)
+            logits = self.py_xzw_network(x, i, w)
             generative_loglikelihood = self.py_xwz_dist(
                 logits=logits
                 ).log_prob(y)
@@ -248,9 +248,12 @@ class Model(nn.Module):
         z = self.pz_wx_network(self, w, x)
         
         #2. Now we marginalize E_{p(z|..)}[p(y|..)]:
-        y_pred = torch.sigmoid(
-            torch.stack(
-            [z[:,i] * self.py_xwz_network(x, i, w) for i in range(z.size(1))]
+        y_pred = torch.stack(
+            [
+            z[:,i] * torch.sigmoid(
+                self.py_xzw_network(x, i, w)
+                ) for i in range(z.size(1))
+            ]
             ).sum(0)
-            )
+            
         return y_pred
