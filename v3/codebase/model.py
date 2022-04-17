@@ -243,17 +243,20 @@ class Model(nn.Module):
         #1. Get motif assignments:
         #We won't sample w - just use w_mean to approximate 
         #for computational efficiency
-        w, _ = self.qw_network()
         
-        z = self.pz_wx_network(self, w, x)
+        with torch.no_grad():
         
-        #2. Now we marginalize E_{p(z|..)}[p(y|..)]:
-        y_pred = torch.stack(
-            [
-            z[:,i] * torch.sigmoid(
-                self.py_xzw_network(x, i, w)
-                ) for i in range(z.size(1))
-            ]
-            ).sum(0)
+            w, _ = self.qw_network()
+            
+            z = self.pz_wx_network(self, w, x)
+            
+            #2. Now we marginalize E_{p(z|..)}[p(y|..)]:
+            y_pred = torch.stack(
+                [
+                z[:,i] * torch.sigmoid(
+                    self.py_xzw_network(x, i, w)
+                    ) for i in range(z.size(1))
+                ]
+                ).sum(0)
             
         return y_pred
