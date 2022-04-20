@@ -153,15 +153,15 @@ class Model(nn.Module):
             )
 
         self.py_xzw_network = py_xzw_network(
-            num_chunks=5,
-            max_pool_factor=4,
-            nchannels=[4, 32, 32],
-            n_hidden=32,
-            dropout=0.2,
+            num_chunks=num_chunks,
+            max_pool_factor=max_pool_factor,
+            nchannels=nchannels,
+            n_hidden=n_hidden,
+            dropout=dropout,
             num_motifs=num_motifs,
             kernel_size=kernel_size,
             stride=1,
-            use_z=True
+            use_z=use_z
             )
 
         self.pz_wx_network = pz_wx_network
