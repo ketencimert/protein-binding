@@ -16,7 +16,7 @@ from codebase.utils import (
 
 
 class py_xzw_network(nn.Module):
-    def __init__(self, 
+    def __init__(self,
                  filter_widths=[15, 5],
                  num_chunks=5,
                  max_pool_factor=4,
@@ -31,27 +31,27 @@ class py_xzw_network(nn.Module):
         super(py_xzw_network, self).__init__()
 
         self.use_z = use_z
-        
+
         self.theta_x = CNN(
             filter_widths=filter_widths,
-            num_chunks=num_chunks, 
-            max_pool_factor=max_pool_factor, 
+            num_chunks=num_chunks,
+            max_pool_factor=max_pool_factor,
             nchannels=nchannels,
-            n_hidden=n_hidden, 
+            n_hidden=n_hidden,
             dropout=dropout,
             num_motifs=num_motifs,
             kernel_size=kernel_size,
             stride=stride,
             use_z=use_z,
             )
-        
+
         self.seq_len = self.theta_x.seq_len
         self.output_dim = self.theta_x.output_dim
-        
+
         if self.use_z:
             layer_size = [self.output_dim*2] + nchannels[1:] + [self.output_dim]
             self.theta_z = nn.Embedding(
-                num_embeddings=num_motifs, 
+                num_embeddings=num_motifs,
                 embedding_dim=self.output_dim
                 )
             self.theta = FFN(
@@ -69,11 +69,12 @@ class py_xzw_network(nn.Module):
             theta = self.theta(torch.cat([theta_x, theta_z],-1))
         else:
             theta = theta_x
-        
-        w_z = w[z,:].view(4, -1)
 
-        y = torch.sum(F.conv1d(x, w_z.unsqueeze(0)).squeeze(1) * theta, -1)
+        w_z = w[z,:].view(4, -1)
         
+        y_ = F.conv1d(x, w_z.unsqueeze(0))
+        y = 0.2 * torch.sum(y_.squeeze(1) * theta, -1)
+        y += 0.8 * torch.max(y_, -1)[0].squeeze(1)
         return y
 
 
@@ -137,8 +138,7 @@ class Model(nn.Module):
             metric='pr',
             ):
         super(Model, self).__init__()
-        
-        
+
         self.eps = 1e-40
         self.num_motifs = num_motifs
 
@@ -170,6 +170,9 @@ class Model(nn.Module):
         self.prior_loc = -1e-2
         self.prior_scale = 1e-3
 
+        # self.prior_scale = 1e-2
+        # self.prior_loc = -1e3*self.prior_scale 
+
         self.seq_len = self.py_xzw_network.seq_len
         #choose metric
 
@@ -182,7 +185,7 @@ class Model(nn.Module):
 
         #0. Initiate elbo
         elbo = 0
-        
+
         #1. Compute posterior w
         posterior_loc, posterior_scale = self.qw_network()
 
@@ -190,7 +193,7 @@ class Model(nn.Module):
             loc=posterior_loc,
             scale=posterior_scale
             ).rsample()
-        
+
         #2. Categorical entropy
         z = self.pz_wx_network(self, w, x)
 
@@ -226,7 +229,7 @@ class Model(nn.Module):
                 logits=logits
                 ).log_prob(y)
 
-            elbo -= 1e6 * z[:,i] * generative_loglikelihood
+            elbo -= 1e8 * z[:,i] * generative_loglikelihood
 
         loss = elbo.mean()
 
@@ -239,17 +242,17 @@ class Model(nn.Module):
 
         #0. Need to compute:
         #E_{q(w),p(z|..)p(y|..)}[y] = E_{q(w),p(z|..)}[p(y|..)]
-        
+
         #1. Get motif assignments:
-        #We won't sample w - just use w_mean to approximate 
+        #We won't sample w - just use w_mean to approximate
         #for computational efficiency
-        
+
         with torch.no_grad():
-        
+
             w, _ = self.qw_network()
-            
+
             z = self.pz_wx_network(self, w, x)
-            
+
             #2. Now we marginalize E_{p(z|..)}[p(y|..)]:
             y_pred = torch.stack(
                 [
@@ -258,5 +261,5 @@ class Model(nn.Module):
                     ) for i in range(z.size(1))
                 ]
                 ).sum(0)
-            
+
         return y_pred

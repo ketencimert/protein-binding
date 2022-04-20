@@ -47,12 +47,12 @@ if __name__ == '__main__':
     parser.add_argument('--nchannels', default=[4, 32, 32], type=list)
     parser.add_argument('--n_hidden', default=32, type=int)
     parser.add_argument('--dropout', default=0.2, type=int)
-    parser.add_argument('--num_motifs', default=2, type=int)
+    parser.add_argument('--num_motifs', default=1, type=int)
     parser.add_argument('--kernel_size', default=20, type=int)
     parser.add_argument('--stride', default=1, type=int)
-    parser.add_argument('--use_z', default=False, type=bool)
+    parser.add_argument('--use_z', default=True, type=bool)
     parser.add_argument('--metric', default='pr', type=str)
-   
+
     #data, fold, tune, metric args
     parser.add_argument('--early_stop', default=10, type=int)
     args = parser.parse_args()
