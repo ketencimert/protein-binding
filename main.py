@@ -19,7 +19,7 @@ from utils import save, dataloader
 from model import Model
 
 if __name__ == '__main__':
-
+    #kwargs to run the model - the parameters are explained in the final report
     parser = argparse.ArgumentParser()
 
     #path args
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     
     seed = 12345
     random.seed(seed), np.random.seed(seed), torch.manual_seed(seed)
-
+    #initiate the model
     model = Model(
             num_chunks=args.num_chunks,
             max_pool_factor=args.max_pool_factor,
@@ -65,7 +65,7 @@ if __name__ == '__main__':
             use_z=args.use_z,
             metric=args.metric,
         ).to(args.device)
-
+    #initiate the dataloader
     train_dataloader, validation_dataloader, _ = dataloader(
         datadir=args.datadir,
         dataname=args.dataname,
@@ -73,15 +73,15 @@ if __name__ == '__main__':
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         )
-
+    #initiate optimizer
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-
+    #store scores in a list
     mean_scores = []
     best_scores = []
     scores = []
     elbos = []
     stop = 0
-
+    #start training
     for epoch in tqdm(range(args.epochs)):
 
         model.train()
@@ -99,7 +99,7 @@ if __name__ == '__main__':
             elbos.append(elbo)
 
         with torch.no_grad():
-
+            #evaluating; no_grad and eval() mode
             model.eval()
             scores_ = []
 
@@ -114,12 +114,12 @@ if __name__ == '__main__':
             mean_scores.append(np.mean(scores))
 
             if scores[-1] >= max(scores):
-
+                #save the best model if valid pr-auc is better
                 best_model = deepcopy(model)
                 save(
                     best_model, '{}_checkpoint'.format(
                         args.dataname
                         )
                     )
-
+        #monitor the metrics
         print('Epoch : {} Best Score : {}'.format(epoch, best_scores[-1]))

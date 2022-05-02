@@ -36,7 +36,7 @@ if __name__ == '__main__':
 
     #optimization / batch args
     parser.add_argument('--lr', default=1e-3, type=float)
-    parser.add_argument('--epochs', default=300, type=int)
+    parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--batch_size', default=1024, type=int)
     parser.add_argument('--num_workers', default=0, type=int)
 
@@ -54,14 +54,13 @@ if __name__ == '__main__':
         seq_len = 110
     else:
         seq_len = None
-
-
+    #initiate the baseline models
     model = {'ffnn':FFNN_BASELINE(),
              'cnn':CNN_BASELINE(),
              'tn':TN_BASELINE(),
              'tncnn':TNCNN_BASELINE(),
              }[args.model].to(args.device)
-        
+    #initiate the dataloader
     train_dataloader, validation_dataloader, _ = dataloader(
         datadir=args.datadir,
         dataname=args.dataname,
@@ -69,9 +68,9 @@ if __name__ == '__main__':
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         )
-    
+    #initiate the optimizer
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-
+    #store the metrics
     stop = 0
     train_accs = []
     val_accs = []
@@ -83,8 +82,8 @@ if __name__ == '__main__':
         args.model, 
         args.dataname
         ) # to save the best model fit to date
-    
-    for epoch in range(100):
+    #train the model
+    for epoch in range(args.epochs):
         start_time = timeit.default_timer()
         train_loss, train_acc = run_one_epoch(True, train_dataloader, model, optimizer, args.device)
         val_loss, val_acc = run_one_epoch(False, validation_dataloader, model, optimizer, args.device)

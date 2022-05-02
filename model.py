@@ -20,7 +20,12 @@ from utils import (
     pr_auc
     )
 
+"""
+p*?_network class is a non-linear function approximator that
+parameterizes a distribution of interest (in this case p*?)
 
+
+"""
 class py_xzw_network(nn.Module):
     def __init__(self,
                  filter_widths=[15, 5],
@@ -37,7 +42,7 @@ class py_xzw_network(nn.Module):
         super(py_xzw_network, self).__init__()
 
         self.use_z = use_z
-
+        #vectorize x using CNN network
         self.theta_x = CNN(
             filter_widths=filter_widths,
             num_chunks=num_chunks,
@@ -53,7 +58,7 @@ class py_xzw_network(nn.Module):
 
         self.seq_len = self.theta_x.seq_len
         self.output_dim = self.theta_x.output_dim
-
+        #create an embedding layer for z
         if self.use_z:
             layer_size = [self.output_dim*2] + nchannels[1:] + [self.output_dim]
             self.theta_z = nn.Embedding(
@@ -67,7 +72,8 @@ class py_xzw_network(nn.Module):
                 )
 
     def forward(self, x, z, w):
-
+        alpha = 0.2
+        #for soft convolution component
         theta_x = self.theta_x(x)
         if self.use_z:
             z = torch.tensor([z]).to(x.device)
@@ -77,36 +83,38 @@ class py_xzw_network(nn.Module):
             theta = theta_x
 
         w_z = w[z,:].view(4, -1)
-        
+        #add soft and hard convolution components
         y_ = F.conv1d(x, w_z.unsqueeze(0))
-        y = 0.2 * torch.sum(y_.squeeze(1) * theta, -1)
-        y += 0.8 * torch.max(y_, -1)[0].squeeze(1)
+        y = alpha * torch.sum(y_.squeeze(1) * theta, -1)
+        y += (1-alpha) * torch.max(y_, -1)[0].squeeze(1) #hard convolution component
         return y
 
 
 def pz_wx_network(model, w, x):
+    
+    #Computes the posterior distribution of pz_wx given the model
+    
+    prior_loc, prior_scale = model.qw_network()
 
-        prior_loc, prior_scale = model.qw_network()
+    pz_ywx = []
 
-        pz_ywx = []
+    for i in range(w.size(0)):
 
-        for i in range(w.size(0)):
+        py_xwz = 0
 
-            py_xwz = 0
+        for j in (0,1):
 
-            for j in (0,1):
+            py_xwz += model.py_xwz_dist(
+                logits=model.py_xzw_network(x, i, w)
+                ).log_prob(torch.Tensor([j]).to(x.device))
 
-                py_xwz += model.py_xwz_dist(
-                    logits=model.py_xzw_network(x, i, w)
-                    ).log_prob(torch.Tensor([j]).to(x.device))
+        pz_ywx.append(py_xwz.unsqueeze(-1))
 
-            pz_ywx.append(py_xwz.unsqueeze(-1))
+    pz_ywx = torch.cat(pz_ywx, -1)
+    pz_ywx = pz_ywx - pz_ywx.logsumexp(-1).unsqueeze(-1)
+    pz_ywx = pz_ywx.exp()
 
-        pz_ywx = torch.cat(pz_ywx, -1)
-        pz_ywx = pz_ywx - pz_ywx.logsumexp(-1).unsqueeze(-1)
-        pz_ywx = pz_ywx.exp()
-
-        return pz_ywx
+    return pz_ywx
 
 class qw_network(nn.Module):
     def __init__(self, num_motifs, kernel_size):

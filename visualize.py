@@ -10,7 +10,6 @@ import argparse
 import logomaker
 import torch
 
-import matplotlib.pyplot as plt
 import pandas as pd
 
 import numpy as np
@@ -43,7 +42,7 @@ if __name__ == '__main__':
     with torch.no_grad():
     
         best_model = torch.load(
-            'saves/model_atac_nummotifs_30_checkpoint.pth'.format(args.dataname)
+            'saves/model_chip_checkpoint.pth'.format(args.dataname)
             ).to(args.device)
         
         best_model.eval()
