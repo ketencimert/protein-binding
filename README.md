@@ -1,6 +1,6 @@
 # Machine Learning for Functional Genomics - Final Project - mk4139
 
-The data is available at:
+Data is available at:
 
 https://drive.google.com/drive/folders/1_2WmaUKLWY2q7kN4TLkreHFvZBoZv8dS
 
