@@ -1,4 +1,4 @@
-# Machine Learning for Functional Genomics - Final Project - mk4139
+# Machine Learning for Functional Genomics - Final Project
 
 Data is available at:
 
